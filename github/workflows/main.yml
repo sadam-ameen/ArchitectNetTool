@@ -1,0 +1,18 @@
+name: Build Stealth APK
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with Buildozer
+        # تم تصحيح الاسم هنا: ArtemSerebrennikov (لاحظ الحروف الكبيرة)
+        uses: ArtemSerebrennikov/buildozer-action@v1.6.1
+        with:
+          command: buildozer android debug
+          buildozer_version: master
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Architect-Tool-APK
+          path: bin/*.apk
