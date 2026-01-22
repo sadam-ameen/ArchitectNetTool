@@ -1,0 +1,20 @@
+<ArchitectNet>:
+    BoxLayout:
+        orientation: 'vertical'
+        TextInput:
+            id: status
+            text: "[SYSTEM READY]: Waiting for execution...\\n"
+            readonly: True
+            background_color: 0, 0, 0, 1
+            foreground_color: 0, 1, 0, 1
+            multiline: True
+            font_size: '14sp'
+            padding: [10, 10]
+        
+        Button:
+            text: 'RUN STEALTH INJECTION'
+            size_hint_y: 0.2
+            background_color: 1, 0, 0, 1
+            font_size: '18sp'
+            bold: True
+            on_press: app.execute(self)
