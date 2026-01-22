@@ -3,112 +3,166 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # ⭐ استخدم Ubuntu 22.04 بدلاً من latest
+    runs-on: ubuntu-latest
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Set up Python 3.9
+    - name: Set up Android SDK and NDK
+      uses: android-actions/setup-android@v3
+      with:
+        ndk: "25.2.9519653"
+        sdk: "34"
+        cmake: "3.22.1"
+        
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'  # ⭐ استخدم Python 3.9
-        architecture: 'x64'
-    
-    - name: Update system packages
+        python-version: '3.10'
+        
+    - name: Install Buildozer dependencies
       run: |
         sudo apt-get update
-        sudo apt-get upgrade -y
-    
-    - name: Install minimal system dependencies
-      run: |
         sudo apt-get install -y \
           python3-pip \
-          python3-dev \
           git \
+          wget \
+          curl \
           zip \
           unzip \
           openjdk-11-jdk \
           zlib1g-dev \
           libncurses5-dev \
-          libncursesw5-dev \
-          libtinfo5 \
           libffi-dev \
           libssl-dev \
           autoconf \
           libtool \
           pkg-config \
-          swig \
-          curl \
-          wget \
           cmake \
-          build-essential \
-          ccache \
-          ninja-build
+          ninja-build \
+          build-essential
         
-        # ⭐ إعداد Java
-        sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java || true
-        echo "JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))" >> $GITHUB_ENV
+        sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+        echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64" >> $GITHUB_ENV
     
-    - name: Install Python dependencies
+    - name: Install Buildozer and Cython
       run: |
         pip3 install --upgrade pip setuptools wheel
         pip3 install cython==0.29.33
-        pip3 install virtualenv
-    
-    - name: Install Buildozer
+        pip3 install buildozer==1.5.0
+        pip3 install kivy==2.3.0 requests
+        
+    - name: Configure Buildozer with correct NDK
       run: |
-        pip3 install buildozer
-    
-    - name: Initialize Buildozer
-      run: |
+        # تنظيف أي إعدادات سابقة
+        rm -rf ~/.buildozer 2>/dev/null || true
+        
+        # إنشاء buildozer.spec إذا لم يكن موجوداً
         if [ ! -f "buildozer.spec" ]; then
           buildozer init
         fi
         
-        # ⭐ تعديل إعدادات الذاكرة
-        sed -i '/^android.accept_sdk_license/c\android.accept_sdk_license = True' buildozer.spec || true
+        # تحديث buildozer.spec مع الإعدادات الصحيحة
+        cat > buildozer.spec << 'EOF'
+[app]
+title = Architect Net
+package.name = stealthinjector
+package.domain = org.test
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,ttf
+version = 1.0
+
+requirements = python3,kivy==2.3.0,requests,urllib3
+
+orientation = portrait
+fullscreen = 0
+log_level = 2
+
+# ⭐⭐ إعدادات أندرويد المهمة ⭐⭐
+android.api = 34
+android.minapi = 21
+android.sdk = 34
+android.ndk = 25.2.9519653
+android.ndk_path = /usr/local/lib/android/sdk/ndk/25.2.9519653
+
+android.permissions = INTERNET, ACCESS_NETWORK_STATE
+
+android.arch = arm64-v8a
+android.accept_sdk_license = True
+
+p4a.branch = master
+android.skip_update = False
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
+EOF
         
-    - name: Build APK with Buildozer (debug)
-      timeout-minutes: 30  # ⭐ زيادة المهلة
+        # تعيين متغيرات البيئة المطلوبة
+        echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+        echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/25.2.9519653" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/25.2.9519653" >> $GITHUB_ENV
+    
+    - name: Build APK with Buildozer (مع استخدام NDK الصحيح)
+      timeout-minutes: 60
       run: |
-        # ⭐ إعدادات لزيادة الذاكرة المتاحة
-        export BUILD_MAX_JOBS=2
+        # تنظيف كامل
+        rm -rf .buildozer bin *.apk build.log 2>/dev/null || true
         
-        # ⭐ تنظيف البناء السابق
-        rm -rf .buildozer || true
-        rm -rf bin/*.apk || true
+        echo "=== Starting Buildozer with NDK 25 ==="
         
-        echo "Starting Buildozer build process..."
+        # تعيين متغيرات البيئة لـ Buildozer
+        export ANDROID_HOME=/usr/local/lib/android/sdk
+        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+        export ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/25.2.9519653
+        export ANDROID_NDK=/usr/local/lib/android/sdk/ndk/25.2.9519653
+        export ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/25.2.9519653
         
-        # ⭐ تشغيل Buildozer مع معالجة الأخطاء
-        buildozer android clean || true
-        buildozer -v android debug 2>&1 | tee build.log
+        # إضافة المسارات إلى PATH
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_NDK_HOME
         
-        # ⭐ التحقق من وجود ملف APK
-        if ls bin/*.apk 1> /dev/null 2>&1; then
-          echo "APK build successful!"
+        # منع Buildozer من تنزيل NDK الخاص به
+        export USE_BUILDOZER_NDK=0
+        
+        # تشغيل Buildozer مع سجل مفصل
+        buildozer android clean 2>&1 | tee -a build.log
+        
+        echo "=== Running buildozer debug ==="
+        buildozer -v android debug 2>&1 | tee -a build.log
+        
+        # التحقق من وجود APK
+        if find bin -name "*.apk" 2>/dev/null | grep -q .; then
+          echo "✅✅✅ BUILD SUCCESSFUL! APK found:"
           ls -la bin/*.apk
+          exit 0
         else
-          echo "APK build failed!"
-          cat build.log | tail -100
+          echo "❌❌❌ BUILD FAILED!"
+          echo "=== Checking logs ==="
+          tail -100 build.log
+          
+          # تحقق من ملفات السجل الإضافية
+          if [ -d ".buildozer" ]; then
+            echo "=== Buildozer logs ==="
+            find .buildozer -name "*.log" -exec tail -50 {} \;
+          fi
+          
           exit 1
-        fi
-        
-    - name: Upload APK artifact
+        end
+    
+    - name: Upload APK on success
       if: success()
       uses: actions/upload-artifact@v4
       with:
         name: Architect-Stealth-APK
         path: bin/*.apk
-        retention-days: 7
-    
-    - name: Upload build logs on failure
+        
+    - name: Upload all logs on failure
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: Build-Failure-Logs
         path: |
           build.log
-          .buildozer/**/*.log
-        retention-days: 30
+          .buildozer/
