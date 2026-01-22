@@ -1,36 +1,39 @@
 [app]
 title = Architect Net
-package.name = arch.stealth.injector
-package.domain = org.architect
+package.name = stealthinjector
+package.domain = org.test
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf
 version = 1.0
-requirements = python3,kivy,requests,urllib3,openssl
+
+# ⭐ المتطلبات الأساسية فقط
+requirements = python3,kivy==2.3.0,requests
+
 orientation = portrait
 fullscreen = 0
+log_level = 2
 
-# ⭐ إعدادات أندرويد مهمة
-osx.python_version = 3
-osx.kivy_version = 2.3.0
-android.api = 33  # ⭐ تحديث API
+# ⭐ إعدادات أندرويد مبسطة
+android.api = 31
 android.minapi = 21
-android.ndk = 25b
-android.sdk = 34
-android.ndk_api = 21
+android.sdk = 33
+android.ndk = 23b
+android.ndk_path = 
+android.sdk_path = 
+android.p4a_dir = 
 
 # ⭐ الصلاحيات
-android.permissions = INTERNET, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE
-
-# ⭐ المعماريات
-android.archs = arm64-v8a, armeabi-v7a
-
-# ⭐ إعدادات إضافية
-android.allow_backup = True
-android.gradle_dependencies = 'com.android.support:multidex:1.0.3'
-p4a.branch = develop
+android.permissions = INTERNET, ACCESS_NETWORK_STATE
 
 # ⭐ إعدادات البناء
+android.arch = arm64-v8a
+android.accept_sdk_license = True
+
 [buildozer]
 log_level = 2
 warn_on_root = 1
-android.accept_sdk_license = True
+
+# ⭐ إعدادات لتقليل استخدام الذاكرة
+android.skip_update = False
+p4a.branch = master
+p4a.local_recipes = 
