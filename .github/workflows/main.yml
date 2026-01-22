@@ -3,54 +3,112 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # ⭐ استخدم Ubuntu 22.04 بدلاً من latest
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Set up Python
+    - name: Set up Python 3.9
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.9'  # ⭐ استخدم Python 3.9
+        architecture: 'x64'
     
-    - name: Install system dependencies
+    - name: Update system packages
       run: |
         sudo apt-get update
+        sudo apt-get upgrade -y
+    
+    - name: Install minimal system dependencies
+      run: |
         sudo apt-get install -y \
+          python3-pip \
+          python3-dev \
           git \
           zip \
           unzip \
           openjdk-11-jdk \
-          autoconf \
-          libtool \
-          pkg-config \
           zlib1g-dev \
           libncurses5-dev \
           libncursesw5-dev \
           libtinfo5 \
-          cmake \
           libffi-dev \
           libssl-dev \
-          python3-pip
-        sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+          autoconf \
+          libtool \
+          pkg-config \
+          swig \
+          curl \
+          wget \
+          cmake \
+          build-essential \
+          ccache \
+          ninja-build
+        
+        # ⭐ إعداد Java
+        sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java || true
+        echo "JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))" >> $GITHUB_ENV
+    
+    - name: Install Python dependencies
+      run: |
+        pip3 install --upgrade pip setuptools wheel
+        pip3 install cython==0.29.33
+        pip3 install virtualenv
     
     - name: Install Buildozer
       run: |
-        pip3 install --upgrade pip
-        pip3 install buildozer cython==0.29.33 virtualenv
-        pip3 install kivy==2.3.0 requests==2.31.0 urllib3==2.0.7
+        pip3 install buildozer
     
-    - name: Build APK with Buildozer
+    - name: Initialize Buildozer
       run: |
-        buildozer init
-        # نسخ ملف buildozer.spec المعدل إذا كان مختلفاً
-        cp buildozer.spec.sample buildozer.spec 2>/dev/null || true
-        buildozer -v android debug
+        if [ ! -f "buildozer.spec" ]; then
+          buildozer init
+        fi
+        
+        # ⭐ تعديل إعدادات الذاكرة
+        sed -i '/^android.accept_sdk_license/c\android.accept_sdk_license = True' buildozer.spec || true
+        
+    - name: Build APK with Buildozer (debug)
+      timeout-minutes: 30  # ⭐ زيادة المهلة
+      run: |
+        # ⭐ إعدادات لزيادة الذاكرة المتاحة
+        export BUILD_MAX_JOBS=2
+        
+        # ⭐ تنظيف البناء السابق
+        rm -rf .buildozer || true
+        rm -rf bin/*.apk || true
+        
+        echo "Starting Buildozer build process..."
+        
+        # ⭐ تشغيل Buildozer مع معالجة الأخطاء
+        buildozer android clean || true
+        buildozer -v android debug 2>&1 | tee build.log
+        
+        # ⭐ التحقق من وجود ملف APK
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "APK build successful!"
+          ls -la bin/*.apk
+        else
+          echo "APK build failed!"
+          cat build.log | tail -100
+          exit 1
+        fi
         
     - name: Upload APK artifact
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: Architect-Stealth-APK
         path: bin/*.apk
         retention-days: 7
+    
+    - name: Upload build logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: Build-Failure-Logs
+        path: |
+          build.log
+          .buildozer/**/*.log
+        retention-days: 30
