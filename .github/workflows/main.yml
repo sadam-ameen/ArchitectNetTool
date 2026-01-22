@@ -1,17 +1,56 @@
-name: Build Stealth APK
-on: [push]
+name: Build Android APK
+on: [push, workflow_dispatch]
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Build with Buildozer
-        uses: ArtemSerebrennikov/buildozer-action@v1.6.1
-        with:
-          command: buildozer android debug
-          buildozer_version: master
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Architect-Tool-APK
-          path: bin/*.apk
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git \
+          zip \
+          unzip \
+          openjdk-11-jdk \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libffi-dev \
+          libssl-dev \
+          python3-pip
+        sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+    
+    - name: Install Buildozer
+      run: |
+        pip3 install --upgrade pip
+        pip3 install buildozer cython==0.29.33 virtualenv
+        pip3 install kivy==2.3.0 requests==2.31.0 urllib3==2.0.7
+    
+    - name: Build APK with Buildozer
+      run: |
+        buildozer init
+        # نسخ ملف buildozer.spec المعدل إذا كان مختلفاً
+        cp buildozer.spec.sample buildozer.spec 2>/dev/null || true
+        buildozer -v android debug
+        
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Architect-Stealth-APK
+        path: bin/*.apk
+        retention-days: 7
